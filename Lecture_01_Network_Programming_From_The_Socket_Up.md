@@ -1,8 +1,6 @@
 # 📡 Lecture 1 — Network Programming: From the Socket Up
 
-> **Course:** Computer Networks (CN at Scaler)
 > **Topic:** Network Programming 101 — Bottom-up from sockets to protocol design
-> **Instructor Slides:** `CN_at_Scaler___Lesson_1.pdf`
 
 ---
 
@@ -21,7 +19,7 @@
 
 ---
 
-## 🗺️ Lecture Plan (What We Cover Today)
+## 🗺️ What We Cover Today
 
 This lecture is built **bottom-up** — starting from the smallest program that can accept a TCP connection, ending with designing your own binary protocol.
 
@@ -92,7 +90,7 @@ gcc -o echo_server echo_server.c
 nc localhost 2026        # connect with netcat and type anything
 ```
 
-> ⚠️ **Limitation:** This version reads **once** and closes. It is not a real conversation. See the persistent version below.
+> ⚠️ **Limitation:** This version reads **once** and closes. It is not a real conversation — see the persistent version below.
 
 ---
 
@@ -193,7 +191,7 @@ while (1) {
 
 ---
 
-### 📬 The Accept Queue (`listen(server_fd, backlog)`)
+### 📬 The Accept Queue — `listen(server_fd, backlog)`
 
 ```c
 listen(server_fd, 1);  // backlog = 1
@@ -203,7 +201,7 @@ listen(server_fd, 1);  // backlog = 1
 2. Connections pile up in a queue. Queue size = backlog argument.
 3. **Full queue behavior is not portable** — some OSes send RST, others let the client hang indefinitely.
 4. We passed `1` in the example. **Real servers pass hundreds**.
-5. Linux caps the actual value at `net.core.somaxconn` — your code's number may not be what's in effect.
+5. Linux caps the actual value at `net.core.somaxconn` — your code's number may not be the number in effect.
 
 ---
 
@@ -268,6 +266,7 @@ telnet mail.example.com 25 # SMTP
 $ telnet google.com 80
 Trying 142.251.222.142...
 Connected to google.com.
+
 GET / HTTP/1.1
 Host: google.com
                             ← blank line (mandatory!)
@@ -322,7 +321,7 @@ int main() {
     memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
     addr.sin_port = htons(8080);
 
-    connect(fd, (struct sockaddr*)&addr, sizeof(addr)); // connect (no bind/listen)
+    connect(fd, (struct sockaddr*)&addr, sizeof(addr)); // connect (no bind/listen needed)
 
     write(fd, "hello", 5);
 
@@ -373,7 +372,7 @@ int main() {
 | `ntohs()` | network to host, short | Port numbers after receiving |
 | `ntohl()` | network to host, long | IP addresses after receiving |
 
-> 💡 Always use these when dealing with port numbers and IP addresses. Without them, port `2026` on your x86 machine would go out as `EA 07` instead of `07 EA` — and the receiver would see port 64007!
+> 💡 Always use these when dealing with port numbers and IP addresses. Without them, port `2026` on your x86 machine would go out as `EA 07` instead of `07 EA` — and the receiver would interpret it as port 64007!
 
 ---
 
@@ -396,7 +395,7 @@ Step 2: Send UDP query to DNS resolver (/etc/resolv.conf)
         Returns IP address
 
 Step 3: Cache result for the TTL duration
-        Fast when cached, can take seconds when cold — with no timeout you control
+        Fast when cached, can take seconds when cold
 ```
 
 **Why this matters:**
@@ -447,7 +446,7 @@ Two important rules:
 
 Point your C client at port 80, write this string, read until close. That is the whole protocol.
 
-### `curl` — The Best HTTP Teaching Tool
+### `curl` — The Best HTTP Debugging Tool
 
 ```bash
 curl google.com                          # basic request
@@ -506,7 +505,7 @@ while (1) {
 | Return value | You are... | What to do |
 |---|---|---|
 | `0` | The **child** | Handle this client, then exit |
-| `> 0` | The **parent** | That number is child's PID. Close your fd copy, go back to `accept()` |
+| `> 0` | The **parent** | That number is the child's PID. Close your fd copy, go back to `accept()` |
 | `-1` | fork failed | Out of memory or processes. Almost nobody checks this. |
 
 **Pros:** Simple, crash-isolated (one child crash does not affect others), OS handles scheduling.
@@ -519,18 +518,18 @@ while (1) {
 
 > Ask the kernel which sockets are ready, then handle only those.
 
-Instead of blocking on one socket, you hand the kernel a *set* of fds and it tells you which ones have data.
+Instead of blocking on one socket, you hand the kernel a *set* of fds and it tells you which ones have data ready.
 
 | Mechanism | Portability | Time Complexity | How it works |
 |---|---|---|---|
-| `select()` | Works everywhere | O(n) — scans all fds | Rebuild the fd set on every call; kernel walks all descriptors |
-| `epoll` | Linux only | O(ready) — only active | Register once; kernel returns only changed descriptors |
+| `select()` | Works everywhere | O(n) — scans all fds | Rebuild fd set on every call; kernel walks all descriptors |
+| `epoll` | Linux only | O(ready) — only active fds | Register once; kernel returns only changed descriptors |
 | `kqueue` | BSD + macOS | O(ready) | macOS equivalent of epoll |
 | `IOCP` | Windows only | O(ready) | Windows equivalent |
 
 > **`epoll` is what nginx and Node.js are built on.** It is why they can handle millions of concurrent connections efficiently.
 
-**The trade-off of epoll:** One slow handler blocks everything in the same process. Unlike `fork()`, there is no crash isolation.
+**Trade-off:** One slow handler blocks everything in the same process. Unlike `fork()`, there is no crash isolation.
 
 ---
 
@@ -577,9 +576,7 @@ tcpdump -r local_capture.pcap -A
 tcpdump -r local_capture.pcap -X
 ```
 
-Capture it once, then read it as ASCII and as hex. Everything we have talked about — headers, length prefixes, connection states — is visible in there.
-
-`Wireshark` is the GUI version with better filtering and protocol dissectors.
+Capture it once, then read it as ASCII and as hex. Everything — headers, length prefixes, connection states — is visible in there. `Wireshark` is the GUI version with better filtering and protocol dissectors.
 
 ---
 
@@ -594,7 +591,7 @@ The same TLS machinery protects HTTP (HTTPS), SSH, SMTP over TLS, database conne
 ```
 Step 1: Key Exchange (Asymmetric crypto)
         Client and server agree on a shared secret
-        Uses RSA or elliptic curve — slow but necessary
+        Uses RSA or elliptic curve — slow but necessary for bootstrapping
 
 Step 2: Symmetric Encryption for Data
         Use the shared secret with AES or ChaCha20
@@ -610,7 +607,7 @@ Step 3: Certificate Verification
 **Certificate Pinning:**
 - Removes the CA from the trust equation
 - "Trust **this exact certificate**, not whatever any CA in the world is willing to sign"
-- Common in mobile apps for extra security against MITM attacks
+- Common in mobile apps for extra security against man-in-the-middle attacks
 
 ---
 
@@ -632,7 +629,7 @@ Step 3: Certificate Verification
 
 ---
 
-### 📦 Message Framing — The Most Important Decision
+### 📦 Message Framing — The Most Important Protocol Decision
 
 > **TCP gives you a byte stream, not messages.**
 >
@@ -705,7 +702,7 @@ MyModule DEFINITIONS ::= BEGIN
 END
 ```
 
-- You write the **schema** once in a language-neutral grammar
+- Write the **schema** once in a language-neutral grammar
 - Tools **generate** encoder and decoder — you never hand-write parsing
 - Created in **1984** and still powering X.509 certificates, LDAP, SNMP, and the entire telecom stack today
 
@@ -724,9 +721,9 @@ Every field is:
 2. **Length** — how many bytes follow?
 3. **Value** — the actual data bytes
 
-**The killer property:** A parser that has **never seen this field type** can still **skip it** — just jump forward by `Length` bytes. This makes TLV inherently **forward-compatible**. Old parsers gracefully handle new fields.
+**The killer property:** A parser that has **never seen this field type** can still **skip it** — just jump forward by `Length` bytes. This makes TLV inherently **forward-compatible**. Old parsers gracefully handle new fields without breaking.
 
-**Used in:** TLS extensions, ISO 8583 (payment messages), Protocol Buffers (protobuf), EMV chip cards, TLS record layer.
+**Used in:** TLS extensions, ISO 8583 (payment messages), Protocol Buffers (protobuf), EMV chip cards.
 
 ---
 
@@ -765,7 +762,7 @@ The terms:
 - **Demarshalling** — bytes → objects (decoding the response received)
 
 **How it works:**
-1. **Marshal** — function name + arguments → bytes (using your encoding choice)
+1. **Marshal** — function name + arguments → bytes (using your chosen encoding)
 2. **Frame and send** — length-prefix it, send it over the socket
 3. **Receive and unmarshal** — read the response, decode it
 
@@ -795,11 +792,11 @@ TLV bytes over HTTP/2 over TLS over TCP
 
 ---
 
-## 📝 Homework — Things to Try
+## 📝 Practice — Things to Try
 
 1. **Wireshark on your laptop** — If you use Redis, look for its traffic. RESP is text and length-prefixed — you will recognize it immediately.
 
-2. **Write a server and client** in your language — the system calls have the same names across languages. That is the point of starting in C.
+2. **Write a server and client** in your language — the system calls have the same names across languages. That is the point of learning them in C first.
 
 3. **Make them do more than echo** — The moment there is structure, you must pick a framing strategy. Notice which one you reach for naturally.
 
@@ -817,7 +814,7 @@ TLV bytes over HTTP/2 over TLS over TCP
 socket · bind · listen · accept · read · write · close
 ```
 
-> Every abstraction you use sits on these seven calls. Go find the `accept()` inside your framework.
+> Every abstraction you use sits on these seven calls. Find the `accept()` inside your framework.
 
 | Concept | What to Remember |
 |---|---|
@@ -836,7 +833,3 @@ socket · bind · listen · accept · read · write · close
 | Message framing | Fixed / Delimited / Length-prefixed — pick one, be deliberate |
 | TLV | Forward-compatible binary framing used by TLS, protobuf, ISO 8583 |
 | gRPC | protobuf schema + TLV wire + HTTP/2 transport |
-
----
-
-*Notes generated from: `CN_at_Scaler___Lesson_1.pdf` · Lecture 1 of 8*
